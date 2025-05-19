@@ -1,20 +1,39 @@
 package com.nganhangdethi.exammanager.gui; // Hoặc package của bạn
 
-import com.nganhangdethi.exammanager.db.DatabaseManager;
-import com.nganhangdethi.exammanager.model.Exam;
-import com.nganhangdethi.exammanager.model.Question;
-import com.nganhangdethi.exammanager.service.AiSuggestionService;
-import com.nganhangdethi.exammanager.service.AudioService;
-import com.nganhangdethi.exammanager.service.ExportService;
-
-import javax.swing.*;
-import javax.swing.table.DefaultTableModel;
-import java.awt.*;
-import java.awt.event.ActionEvent;
+import java.awt.BorderLayout;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.Font;
 import java.io.File; // For JFileChooser
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+
+import javax.swing.BorderFactory;
+import javax.swing.DefaultListModel;
+import javax.swing.JButton;
+import javax.swing.JFileChooser;
+import javax.swing.JFrame;
+import javax.swing.JList;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTabbedPane;
+import javax.swing.JTable;
+import javax.swing.JTextArea;
+import javax.swing.ListSelectionModel;
+import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
+import javax.swing.table.DefaultTableModel;
+
+import com.nganhangdethi.exammanager.db.DatabaseManager;
+import com.nganhangdethi.exammanager.model.Exam;
+import com.nganhangdethi.exammanager.model.Question;
+import com.nganhangdethi.exammanager.model.QuestionOption;
+import com.nganhangdethi.exammanager.service.AiSuggestionService;
+import com.nganhangdethi.exammanager.service.AudioService;
+import com.nganhangdethi.exammanager.service.ExportService;
 
 public class MainFrame extends JFrame {
     // Services and Managers
@@ -253,72 +272,118 @@ public class MainFrame extends JFrame {
     }
 
     private void handleCreateAndExportNewExam() {
-        ExportDialog exportDialog = new ExportDialog(this); // Dialog để chọn số câu, shuffle, format
+        ExportDialog exportDialog = new ExportDialog(this);
         exportDialog.setVisible(true);
 
         if (exportDialog.isConfirmed()) {
-            int numQuestions = exportDialog.getNumberOfQuestions();
-            boolean shuffle = exportDialog.isShuffleEnabled();
+            Map<String, Integer> countsPerType = exportDialog.getQuestionCountsPerType();
+            boolean shuffleQuestions = exportDialog.isShuffleQuestionsEnabled();
+            boolean shuffleMcqAnswers = exportDialog.isShuffleMcqAnswersEnabled();
             String format = exportDialog.getFormat();
 
-            // Lấy tất cả câu hỏi từ DB (có thể thêm filter sau này)
-            // Hiện tại, chúng ta dùng getAllQuestionsForTable để lấy ID, sau đó getById để lấy chi tiết
-            // Điều này không tối ưu lắm nếu số lượng câu hỏi lớn, nhưng đơn giản để bắt đầu.
-            List<Question> allAvailableQuestions = dbManager.getAllQuestionsForTable(); // Chỉ lấy thông tin cơ bản
-            if (allAvailableQuestions.isEmpty()) {
-                JOptionPane.showMessageDialog(this, "Ngân hàng không có câu hỏi nào để tạo đề.", "Lỗi", JOptionPane.ERROR_MESSAGE);
-                return;
-            }
-            if (numQuestions > allAvailableQuestions.size()){
-                numQuestions = allAvailableQuestions.size();
-                JOptionPane.showMessageDialog(this, "Số câu yêu cầu lớn hơn số câu có trong ngân hàng. Sẽ lấy tất cả " + numQuestions + " câu.", "Thông báo", JOptionPane.INFORMATION_MESSAGE);
-            }
+            List<Question> questionsForExam = new ArrayList<>();
 
-
-            List<Question> selectedQuestionStubs = new ArrayList<>(allAvailableQuestions); // Copy list
-            if (shuffle) {
-                Collections.shuffle(selectedQuestionStubs);
-            }
-            // Lấy N câu hỏi đầu tiên
-            List<Question> questionsForExamDetails = new ArrayList<>();
-            for (int i = 0; i < Math.min(numQuestions, selectedQuestionStubs.size()); i++) {
-                Question detailedQ = dbManager.getQuestionById(selectedQuestionStubs.get(i).getQuestionID());
-                if(detailedQ != null) questionsForExamDetails.add(detailedQ);
+            // 1. Lấy câu hỏi theo từng loại
+            for (Map.Entry<String, Integer> entry : countsPerType.entrySet()) {
+                String questionType = entry.getKey();
+                int count = entry.getValue();
+                if (count > 0) {
+                    // Bạn cần một phương thức trong DatabaseManager để lấy câu hỏi theo loại và số lượng
+                    // Ví dụ: dbManager.getQuestionsByType(questionType, count);
+                    // Phương thức này nên trả về các câu hỏi đã được chọn ngẫu nhiên nếu có nhiều hơn 'count' câu.
+                    // Hoặc, lấy tất cả câu hỏi của loại đó rồi chọn ngẫu nhiên ở đây.
+                    List<Question> questionsOfType = dbManager.getQuestionsByTypeAndLimit(questionType, count); // Giả sử có phương thức này
+                    
+                    if (questionsOfType.size() < count) {
+                        JOptionPane.showMessageDialog(this,
+                            "Không đủ " + count + " câu loại '" + questionType + "'. Chỉ lấy được " + questionsOfType.size() + " câu.",
+                            "Thiếu Câu Hỏi", JOptionPane.WARNING_MESSAGE);
+                    }
+                    questionsForExam.addAll(questionsOfType);
+                }
             }
 
-
-            if (questionsForExamDetails.isEmpty()) {
-                JOptionPane.showMessageDialog(this, "Không chọn được câu hỏi nào cho đề thi.", "Lỗi", JOptionPane.ERROR_MESSAGE);
+            if (questionsForExam.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "Không có câu hỏi nào được chọn cho đề thi.", "Lỗi", JOptionPane.ERROR_MESSAGE);
                 return;
             }
 
+            // 2. Xáo trộn thứ tự câu hỏi tổng thể (nếu được chọn)
+            if (shuffleQuestions) {
+                Collections.shuffle(questionsForExam);
+            }
+
+            // 3. Xáo trộn đáp án cho câu MCQ (nếu được chọn) và cập nhật lại chữ cái A,B,C,D
+            if (shuffleMcqAnswers) {
+                char[] optionLetters = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'}; // Mảng chữ cái
+                for (Question q : questionsForExam) {
+                    if (ExportDialog.TYPE_MCQ.equalsIgnoreCase(q.getQuestionType()) && q.getOptions() != null && !q.getOptions().isEmpty()) {
+                        List<QuestionOption> originalOptions = new ArrayList<>(q.getOptions()); // Tạo bản sao để không ảnh hưởng DB gốc nếu q từ cache
+                        Collections.shuffle(originalOptions); // Xáo trộn danh sách options
+
+                        // Cập nhật lại OptionLetter và tìm đáp án đúng mới
+                        String newCorrectLetter = null;
+                        List<QuestionOption> shuffledOptionsForExam = new ArrayList<>();
+
+                        for (int i = 0; i < originalOptions.size(); i++) {
+                            QuestionOption shuffledOpt = originalOptions.get(i);
+                            // Tạo một QuestionOption mới hoặc clone để không thay đổi QuestionOption gốc từ DB
+                            QuestionOption displayOpt = new QuestionOption();
+                            // displayOpt.setOptionID(shuffledOpt.getOptionID()); // Giữ lại ID gốc nếu cần
+                            displayOpt.setQuestionID(shuffledOpt.getQuestionID());
+                            displayOpt.setOptionText(shuffledOpt.getOptionText());
+                            displayOpt.setCorrect(shuffledOpt.isCorrect()); // Quan trọng: giữ cờ isCorrect
+                            
+                            if (i < optionLetters.length) {
+                                displayOpt.setOptionLetter(String.valueOf(optionLetters[i])); // Gán lại A, B, C, D
+                            } else {
+                                displayOpt.setOptionLetter(String.valueOf(i + 1)); // Nếu nhiều hơn số chữ cái có sẵn
+                            }
+                            
+                            if (displayOpt.isCorrect()) {
+                                newCorrectLetter = displayOpt.getOptionLetter();
+                            }
+                            shuffledOptionsForExam.add(displayOpt);
+                        }
+                        q.setOptions(shuffledOptionsForExam); // Gán lại danh sách options đã xáo trộn và có chữ cái mới
+                        // Cập nhật lại CorrectAnswerKey của Question q để phản ánh chữ cái mới của đáp án đúng
+                        // Điều này quan trọng cho file đáp án.
+                        // q.setCorrectAnswerKey(newCorrectLetter); // Hoặc bạn có một trường riêng cho việc này
+                                                                  // Hoặc getResolvedCorrectAnswerText() sẽ tự tìm
+                    }
+                }
+            }
+            
+            // (Phần hỏi lưu đề thi và gọi exportExamToFile như cũ)
+            // ...
             // Hỏi có muốn lưu bộ đề này không
             int saveExamConfirm = JOptionPane.showConfirmDialog(this,
                     "Bạn có muốn lưu bộ đề này vào hệ thống không?",
                     "Lưu Đề Thi", JOptionPane.YES_NO_OPTION);
 
+            String examBaseName = "DeThiTaoNgay_" + new java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(new java.util.Date());
+
             if (saveExamConfirm == JOptionPane.YES_OPTION) {
-                String examName = JOptionPane.showInputDialog(this, "Nhập tên cho bộ đề thi này:", "Lưu Đề Thi", JOptionPane.PLAIN_MESSAGE);
-                if (examName != null && !examName.trim().isEmpty()) {
+                String examNameInput = JOptionPane.showInputDialog(this, "Nhập tên cho bộ đề thi này:", examBaseName);
+                if (examNameInput != null && !examNameInput.trim().isEmpty()) {
                     Exam newExam = new Exam();
-                    newExam.setExamName(examName.trim());
+                    newExam.setExamName(examNameInput.trim());
                     newExam.setDescription("Đề thi được tạo tự động ngày " + new java.util.Date());
-                    newExam.setShuffleEnabled(shuffle); // Lưu trạng thái shuffle khi tạo
-                    // TotalQuestions sẽ được tính trong dbManager.addExam
-                    Exam savedExam = dbManager.addExam(newExam, questionsForExamDetails);
+                    newExam.setShuffleEnabled(shuffleQuestions);
+                    // questionsForExam lúc này đã có thể có options đã xáo trộn
+                    Exam savedExam = dbManager.addExam(newExam, questionsForExam);
                     if (savedExam != null) {
                         JOptionPane.showMessageDialog(this, "Đã lưu đề thi '" + savedExam.getExamName() + "' vào hệ thống.", "Thành Công", JOptionPane.INFORMATION_MESSAGE);
-                        loadExamsToList(); // Refresh danh sách đề thi
+                        loadExamsToList();
+                        examBaseName = savedExam.getExamName().replaceAll("[^a-zA-Z0-9.-]", "_"); // Dùng tên đã lưu làm base
                     } else {
                         JOptionPane.showMessageDialog(this, "Lưu đề thi thất bại.", "Lỗi", JOptionPane.ERROR_MESSAGE);
                     }
-                } else if (examName != null) { // Người dùng nhấn OK nhưng không nhập tên
+                } else if (examNameInput != null) {
                      JOptionPane.showMessageDialog(this, "Tên đề thi không được để trống. Đề thi sẽ không được lưu.", "Thông Báo", JOptionPane.WARNING_MESSAGE);
                 }
             }
-
-            // Tiến hành export
-            exportExamToFile(questionsForExamDetails, format, "DeThiMoiTao");
+            exportExamToFile(questionsForExam, format, examBaseName);
         }
     }
 

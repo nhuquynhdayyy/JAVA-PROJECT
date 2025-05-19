@@ -1,29 +1,42 @@
-package com.nganhangdethi.exammanager.gui; // Hoặc package của bạn
+package com.nganhangdethi.exammanager.gui;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
+import java.util.HashMap;
+import java.util.Map;
 
 public class ExportDialog extends JDialog {
-    private JSpinner spnNumQuestions;
-    private JCheckBox chkShuffle;
+    // Spinners cho từng loại câu hỏi
+    private JSpinner spnNumMcq;          // MultipleChoice
+    private JSpinner spnNumFillInBlank;
+    private JSpinner spnNumListening;
+    private JSpinner spnNumReading;
+    // Bạn có thể thêm các loại khác nếu cần
+
+    private JCheckBox chkShuffleQuestions; // Xáo trộn thứ tự câu hỏi
+    private JCheckBox chkShuffleMcqAnswers; // Xáo trộn thứ tự đáp án của câu MCQ
     private JComboBox<String> cmbFormat;
     private JButton btnConfirm;
     private JButton btnCancel;
 
     private boolean confirmed = false;
-//    private final Font hybridFont = new Font("MS Gothic", Font.PLAIN, 14); // Hoặc font bạn dùng
     private final Font vietnameseFont = new Font("Arial", Font.PLAIN, 13);
-//    private final Font hybridFont = new Font("Segoe UI", Font.PLAIN, 14);
     private final Font hybridFont = new Font("Yu Gothic UI", Font.PLAIN, 14);
 
+    // Danh sách các loại câu hỏi bạn muốn người dùng có thể chọn số lượng
+    public static final String TYPE_MCQ = "MultipleChoice";
+    public static final String TYPE_FILL = "FillInBlank";
+    public static final String TYPE_LISTEN = "Listening";
+    public static final String TYPE_READ = "Reading";
+    // Thêm các loại khác ở đây nếu muốn, ví dụ:
+    // public static final String TYPE_ESSAY = "Essay";
+
     public ExportDialog(Frame owner) {
-        super(owner, "Tùy Chọn Xuất Đề Thi", true); // true = modal dialog
+        super(owner, "Tùy Chọn Tạo Đề Thi Nâng Cao", true);
         initComponents();
-        addListeners();
-        pack(); // Tự động điều chỉnh kích thước dialog
-        setLocationRelativeTo(owner); // Hiển thị giữa frame cha
+        addListeners(); // Sẽ được thêm sau
+        pack();
+        setLocationRelativeTo(owner);
         setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
     }
 
@@ -33,113 +46,162 @@ public class ExportDialog extends JDialog {
         panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(5, 5, 5, 5);
-        gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.anchor = GridBagConstraints.WEST;
 
-        // Hàng 0: Số lượng câu hỏi
-        gbc.gridx = 0; gbc.gridy = 0;
-        JLabel lblNumQuestions = new JLabel("Số lượng câu hỏi:");
-        lblNumQuestions.setFont(vietnameseFont);
-        panel.add(lblNumQuestions, gbc);
+        int gridY = 0;
 
-        gbc.gridx = 1; gbc.gridy = 0;
-        // Giới hạn số câu từ 1 đến 500, mặc định 20, bước nhảy 1
-        spnNumQuestions = new JSpinner(new SpinnerNumberModel(20, 1, 500, 1));
-        spnNumQuestions.setFont(hybridFont);
-        panel.add(spnNumQuestions, gbc);
+        // Số lượng câu hỏi MultipleChoice
+        gbc.gridx = 0; gbc.gridy = gridY;
+        JLabel lblNumMcq = new JLabel("Số câu Trắc nghiệm (MCQ):");
+        lblNumMcq.setFont(vietnameseFont);
+        panel.add(lblNumMcq, gbc);
+        gbc.gridx = 1;
+        spnNumMcq = new JSpinner(new SpinnerNumberModel(10, 0, 200, 1)); // Mặc định 10, min 0, max 200
+        spnNumMcq.setFont(hybridFont);
+        panel.add(spnNumMcq, gbc);
+        gridY++;
 
-        // Hàng 1: Sáo trộn câu hỏi
-        gbc.gridx = 0; gbc.gridy = 1;
-        JLabel lblShuffle = new JLabel("Sáo trộn câu hỏi:");
-        lblShuffle.setFont(vietnameseFont);
-        panel.add(lblShuffle, gbc);
+        // Số lượng câu hỏi FillInBlank
+        gbc.gridx = 0; gbc.gridy = gridY;
+        JLabel lblNumFill = new JLabel("Số câu Điền khuyết:");
+        lblNumFill.setFont(vietnameseFont);
+        panel.add(lblNumFill, gbc);
+        gbc.gridx = 1;
+        spnNumFillInBlank = new JSpinner(new SpinnerNumberModel(5, 0, 100, 1));
+        spnNumFillInBlank.setFont(hybridFont);
+        panel.add(spnNumFillInBlank, gbc);
+        gridY++;
 
-        gbc.gridx = 1; gbc.gridy = 1;
-        chkShuffle = new JCheckBox("", true); // Mặc định là chọn
-        panel.add(chkShuffle, gbc);
+        // Số lượng câu hỏi Listening
+        gbc.gridx = 0; gbc.gridy = gridY;
+        JLabel lblNumListen = new JLabel("Số câu Nghe hiểu:");
+        lblNumListen.setFont(vietnameseFont);
+        panel.add(lblNumListen, gbc);
+        gbc.gridx = 1;
+        spnNumListening = new JSpinner(new SpinnerNumberModel(3, 0, 50, 1));
+        spnNumListening.setFont(hybridFont);
+        panel.add(spnNumListening, gbc);
+        gridY++;
 
-        // Hàng 2: Định dạng xuất
-        gbc.gridx = 0; gbc.gridy = 2;
+        // Số lượng câu hỏi Reading
+        gbc.gridx = 0; gbc.gridy = gridY;
+        JLabel lblNumRead = new JLabel("Số câu Đọc hiểu:");
+        lblNumRead.setFont(vietnameseFont);
+        panel.add(lblNumRead, gbc);
+        gbc.gridx = 1;
+        spnNumReading = new JSpinner(new SpinnerNumberModel(2, 0, 50, 1));
+        spnNumReading.setFont(hybridFont);
+        panel.add(spnNumReading, gbc);
+        gridY++;
+
+        // Thêm các JSpinner cho các loại câu hỏi khác nếu cần theo cách tương tự
+
+        // Đường kẻ ngang
+        gbc.gridx = 0; gbc.gridy = gridY; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.HORIZONTAL;
+        panel.add(new JSeparator(), gbc);
+        gbc.gridwidth = 1; gbc.fill = GridBagConstraints.NONE; // Reset
+        gridY++;
+
+
+        // Xáo trộn thứ tự câu hỏi
+        gbc.gridx = 0; gbc.gridy = gridY;
+        JLabel lblShuffleQ = new JLabel("Xáo trộn thứ tự câu hỏi:");
+        lblShuffleQ.setFont(vietnameseFont);
+        panel.add(lblShuffleQ, gbc);
+        gbc.gridx = 1;
+        chkShuffleQuestions = new JCheckBox("", true);
+        panel.add(chkShuffleQuestions, gbc);
+        gridY++;
+
+        // Xáo trộn thứ tự đáp án MCQ
+        gbc.gridx = 0; gbc.gridy = gridY;
+        JLabel lblShuffleA = new JLabel("Xáo trộn đáp án (MCQ):");
+        lblShuffleA.setFont(vietnameseFont);
+        panel.add(lblShuffleA, gbc);
+        gbc.gridx = 1;
+        chkShuffleMcqAnswers = new JCheckBox("", false); // Mặc định không chọn
+        panel.add(chkShuffleMcqAnswers, gbc);
+        gridY++;
+
+        // Định dạng xuất
+        gbc.gridx = 0; gbc.gridy = gridY;
         JLabel lblFormat = new JLabel("Định dạng xuất:");
         lblFormat.setFont(vietnameseFont);
         panel.add(lblFormat, gbc);
-
-        gbc.gridx = 1; gbc.gridy = 2;
+        gbc.gridx = 1;
         cmbFormat = new JComboBox<>(new String[]{"PDF", "DOCX"});
         cmbFormat.setFont(hybridFont);
         panel.add(cmbFormat, gbc);
+        gridY++;
+
 
         add(panel, BorderLayout.CENTER);
 
-        // Panel chứa nút Confirm và Cancel
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        btnConfirm = new JButton("Xuất File");
+        btnConfirm = new JButton("Tạo Đề");
         btnConfirm.setFont(vietnameseFont);
         btnCancel = new JButton("Hủy");
         btnCancel.setFont(vietnameseFont);
-
         buttonPanel.add(btnConfirm);
         buttonPanel.add(btnCancel);
         add(buttonPanel, BorderLayout.SOUTH);
     }
 
     private void addListeners() {
-        btnConfirm.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                confirmed = true;
-                dispose(); // Đóng dialog
+        btnConfirm.addActionListener(e -> {
+            // Kiểm tra tổng số câu > 0
+            if (getTotalNumberOfSelectedQuestions() <= 0) {
+                JOptionPane.showMessageDialog(this,
+                        "Vui lòng chọn ít nhất một câu hỏi cho đề thi.",
+                        "Chưa Chọn Câu Hỏi", JOptionPane.WARNING_MESSAGE);
+                return;
             }
+            confirmed = true;
+            dispose();
         });
-
-        btnCancel.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                confirmed = false;
-                dispose(); // Đóng dialog
-            }
+        btnCancel.addActionListener(e -> {
+            confirmed = false;
+            dispose();
         });
     }
 
-    // Các phương thức getter để MainFrame lấy thông tin từ dialog
     public boolean isConfirmed() {
         return confirmed;
     }
 
-    public int getNumberOfQuestions() {
-        return (int) spnNumQuestions.getValue();
+    /**
+     * Trả về một Map chứa số lượng câu hỏi mong muốn cho từng loại.
+     * Key là hằng số loại câu hỏi (ví dụ: ExportDialog.TYPE_MCQ), Value là số lượng.
+     */
+    public Map<String, Integer> getQuestionCountsPerType() {
+        Map<String, Integer> counts = new HashMap<>();
+        counts.put(TYPE_MCQ, (Integer) spnNumMcq.getValue());
+        counts.put(TYPE_FILL, (Integer) spnNumFillInBlank.getValue());
+        counts.put(TYPE_LISTEN, (Integer) spnNumListening.getValue());
+        counts.put(TYPE_READ, (Integer) spnNumReading.getValue());
+        // Thêm các loại khác nếu có
+        return counts;
+    }
+    
+    public int getTotalNumberOfSelectedQuestions() {
+        int total = 0;
+        total += (Integer) spnNumMcq.getValue();
+        total += (Integer) spnNumFillInBlank.getValue();
+        total += (Integer) spnNumListening.getValue();
+        total += (Integer) spnNumReading.getValue();
+        return total;
     }
 
-    public boolean isShuffleEnabled() {
-        return chkShuffle.isSelected();
+
+    public boolean isShuffleQuestionsEnabled() {
+        return chkShuffleQuestions.isSelected();
+    }
+
+    public boolean isShuffleMcqAnswersEnabled() {
+        return chkShuffleMcqAnswers.isSelected();
     }
 
     public String getFormat() {
         return (String) cmbFormat.getSelectedItem();
     }
-
-    // (Tùy chọn) Một hàm main để test riêng dialog này nếu cần
-    /*
-    public static void main(String[] args) {
-        // Tạo một JFrame ảo để làm owner
-        JFrame testOwner = new JFrame();
-        testOwner.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        testOwner.setSize(300,200);
-        testOwner.setLocationRelativeTo(null);
-        // testOwner.setVisible(true); // Không cần thiết phải hiện owner
-
-        ExportDialog dialog = new ExportDialog(testOwner);
-        dialog.setVisible(true);
-
-        if (dialog.isConfirmed()) {
-            System.out.println("Confirmed!");
-            System.out.println("Number of Questions: " + dialog.getNumberOfQuestions());
-            System.out.println("Shuffle Enabled: " + dialog.isShuffleEnabled());
-            System.out.println("Format: " + dialog.getFormat());
-        } else {
-            System.out.println("Cancelled!");
-        }
-        System.exit(0); // Thoát chương trình test
-    }
-    */
 }

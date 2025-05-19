@@ -552,4 +552,41 @@ public class DatabaseManager {
             return false;
         }
     }
+    
+    public List<Question> getQuestionsByTypeAndLimit(String questionType, int limit) {
+        List<Question> questions = new ArrayList<>();
+        if (limit <= 0) { // Nếu không yêu cầu câu nào của loại này, trả về danh sách rỗng
+            return questions;
+        }
+
+        // SQL Server sử dụng TOP và NEWID() để lấy ngẫu nhiên
+        // Đối với các CSDL khác, cú pháp có thể là:
+        // MySQL: "... ORDER BY RAND() LIMIT ?"
+        // PostgreSQL/SQLite: "... ORDER BY RANDOM() LIMIT ?"
+        String sql = "SELECT TOP (?) QuestionID FROM Questions WHERE QuestionType = ? ORDER BY NEWID()";
+
+        try (Connection conn = getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setInt(1, limit);        // Tham số cho TOP (?)
+            pstmt.setNString(2, questionType); // Tham số cho QuestionType = ?
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    // Lấy chi tiết đầy đủ của câu hỏi bằng ID đã lấy được
+                    // Điều này vẫn có thể gây ra N+1 query nếu limit lớn.
+                    // Một cách tối ưu hơn là JOIN để lấy tất cả thông tin cần thiết trong 1 query,
+                    // nhưng getQuestionById() đã có sẵn và dễ dùng cho trường hợp này.
+                    Question q = getQuestionById(rs.getInt("QuestionID"));
+                    if (q != null) {
+                        questions.add(q);
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Lỗi SQL khi lấy " + limit + " câu hỏi loại '" + questionType + "': " + e.getMessage());
+            e.printStackTrace();
+        }
+        return questions;
+    }
 }
