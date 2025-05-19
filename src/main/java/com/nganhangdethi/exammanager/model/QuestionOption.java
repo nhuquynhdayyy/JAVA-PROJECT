@@ -1,6 +1,6 @@
 package com.nganhangdethi.exammanager.model;
 
-public class QuestionOption {
+public class QuestionOption implements Cloneable {
     private int optionID;
     private int questionID; // Foreign key
     private String optionLetter; // e.g., "A", "B"
@@ -32,4 +32,13 @@ public class QuestionOption {
     public String toString() { // For display in lists if needed
         return optionLetter + ". " + optionText + (isCorrect ? " (Correct)" : "");
     }
+    
+ // --- THÊM PHƯƠNG THỨC CLONE ---
+    @Override
+    public QuestionOption clone() throws CloneNotSupportedException {
+        // Vì tất cả các trường đều là kiểu nguyên thủy hoặc String (immutable),
+        // shallow copy từ super.clone() là đủ an toàn cho QuestionOption.
+        return (QuestionOption) super.clone();
+    }
+    
 }
